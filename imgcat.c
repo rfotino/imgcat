@@ -1,3 +1,5 @@
+#include "environment.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -152,7 +154,7 @@ void print_raster(raster_t *raster, const int print_width) {
 }
 
 int main(int argc, char **argv) {
-  int i, print_width = 80, raw_bytes_length = 0;
+  int i, print_width = 0, raw_bytes_length = 0;
   char *filename = 0;
   FILE *imgfile;
   unsigned char *raw_bytes;
@@ -172,6 +174,14 @@ int main(int argc, char **argv) {
       }
     } else if (endswith(argv[i], ".bmp")) {
       filename = argv[i];
+    }
+  }
+
+  if (print_width < 1) {
+    print_width = get_terminal_width();
+    if (print_width < 1) {
+      fprintf(stderr, "Failed to determine terminal width. Specify width using -w.\n");
+      exit(1);
     }
   }
 
