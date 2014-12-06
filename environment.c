@@ -27,11 +27,14 @@
 #include <stdio.h>
 
 unsigned short get_terminal_width(void) {
-  unsigned short width = 0;
+  unsigned short width = 80;
 
   struct winsize w;
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) >= 0)
-    width = w.ws_col;
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) >= 0) {
+    if (w.ws_col > 0) {
+      width = w.ws_col;
+    }
+  }
 
   return width;
 }

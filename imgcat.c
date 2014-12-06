@@ -218,10 +218,6 @@ int main(int argc, char **argv) {
 
   if (print_width < 1) {
     print_width = get_terminal_width();
-    if (print_width < 1) {
-      fprintf(stderr, "Failed to determine terminal width. Specify width using -w.\n");
-      exit(1);
-    }
   }
 
   if (filename) {
