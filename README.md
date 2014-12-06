@@ -8,6 +8,11 @@ view the contents of a text file, you use "cat". When you want to view the conte
 image, you use "imgcat". This could be used when you're connected remotely and don't have
 a way to view images graphically.
 
+## Options
+* `-w NUM`: Sets the number of characters wide the output will be.
+* `*.bmp`: The last argument ending in ".bmp" will be used as the input file. Otherwise it
+will read from stdin.
+
 ## Issues
 * Only supports 24-bit BMP files, and nothing complicated like palettes. More formats
 might be added if I have time.
