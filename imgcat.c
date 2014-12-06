@@ -1,3 +1,26 @@
+/*
+ * Copyright (C) 2014 Robert Fotino
+ * Copyright (C) 2014 Garrett Brown
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ *    The above copyright notice and this permission notice shall be included in
+ *    all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 #include "environment.h"
 
 #include <stdio.h>
@@ -97,6 +120,7 @@ raster_t* convert_byte_array(unsigned char *bytes, const int length) {
   raster_t *raster;
   int width, height, row_padded, x, y;
   unsigned int offset;
+  unsigned short bit_depth;
 
   //The combined byte length of the headers should be at least 54 bytes,
   //and the first two bytes of the file should be 'B' and 'M'.
@@ -109,12 +133,27 @@ raster_t* convert_byte_array(unsigned char *bytes, const int length) {
   offset = *(unsigned int *)(&bytes[10]);
   width = *(int *)(&bytes[18]);
   height = *(int *)(&bytes[22]);
+  bit_depth = *(unsigned short *)(&bytes[28]);
+
+  //We only support 24-bit BMPs right now
+  if (bit_depth != 24) {
+    fprintf(stderr, "BMP must be a 24-bit image.\n");
+    exit(4);
+  }
+
+  //Each row of pixels is padded in byte multiples of 4
+  row_padded = ((width * 3) + 3) & (~3);
+
+  //Make sure width and height are positive and the byte array is at least
+  //long enough to contain all of the pixels.
+  if (width < 0 || height < 0 || (offset + (row_padded * height)) > length) {
+    fprintf(stderr, "Invalid BMP file.\n");
+    exit(3);
+  }
 
   //Create the raster of the specified size
   raster = create_raster(width, height);
 
-  //Each row of pixels is padded in byte multiples of 4
-  row_padded = ((width * 3) + 3) & (~3);
   for (y = height - 1; y >= 0; --y) {
     for (x = 0; x < width; ++x) {
       raster->pixels[height-y-1][x].b = bytes[offset+(row_padded*y)+(x*3)];
