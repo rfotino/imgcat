@@ -24,7 +24,7 @@
 #define ENVIRONMENT_H
 
 /**
- * Return the terminal width in characters, or 0 if unknown.
+ * Return the terminal width in characters, or 80 if unknown.
  */
 unsigned short get_terminal_width(void);
 
