@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <jpeglib.h>
+#include <png.h>
 
 #include "convert.h"
 
@@ -178,7 +179,89 @@ raster_t* create_raster_from_jpg(FILE *file) {
 }
 
 raster_t* create_raster_from_png(FILE *file) {
-  fprintf(stderr, "Reading PNG files is currently not supported.\n");
-  exit(5);
+  raster_t *raster = 0;
+  unsigned char sig[8], *image_data;
+  png_struct *png_ptr;
+  png_info *info_ptr;
+  png_uint_32 width, height, rowbytes;
+  png_bytep *row_pointers;
+  int bit_depth, color_type, i, x, y;
+  float alpha;
+
+  fread(sig, 1, 8, file);
+  if (!png_check_sig(sig, 8)) {
+    fprintf(stderr, "Invalid PNG file.\n");
+    exit(5);
+  }
+
+  png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if (!png_ptr) {
+    fprintf(stderr, "Memory allocation failure.\n");
+    exit(2);
+  }
+
+  info_ptr = png_create_info_struct(png_ptr);
+  if (!info_ptr) {
+    png_destroy_read_struct(&png_ptr, NULL, NULL);
+    fprintf(stderr, "Memory allocation failure.\n");
+    exit(2);
+  }
+
+  png_init_io(png_ptr, file);
+  png_set_sig_bytes(png_ptr, 8);
+  png_read_info(png_ptr, info_ptr);
+
+  png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type, NULL, NULL, NULL);
+
+  if (color_type == PNG_COLOR_TYPE_PALETTE ||
+      (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) ||
+      png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
+    png_set_expand(png_ptr);
+  }
+  if (bit_depth == 16) {
+    png_set_strip_16(png_ptr);
+  }
+  if (color_type == PNG_COLOR_TYPE_GRAY ||
+      color_type == PNG_COLOR_TYPE_GRAY_ALPHA) {
+    png_set_gray_to_rgb(png_ptr);
+  }
+
+  row_pointers = malloc(height * sizeof(row_pointers));
+  if (!row_pointers) {
+    fprintf(stderr, "Memory allocation failure.\n");
+    exit(2);
+  }
+
+  png_read_update_info(png_ptr, info_ptr);
+  rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+  if ((image_data = (unsigned char *)malloc(rowbytes * height)) == NULL) {
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    fprintf(stderr, "Memory allocation failure.\n");
+    exit(2);
+  }
+
+  for (i = 0; i < height; ++i) {
+    row_pointers[i] = image_data + i*rowbytes;
+  }
+
+  png_read_image(png_ptr, row_pointers);
+  png_read_end(png_ptr, NULL);
+
+  raster = create_raster(width, height);
+  for (y = 0; y < height; ++y) {
+    for (x = 0; x < width; ++x) {
+      //Do alpha correction so that higher alpha values make the image more white
+      alpha = row_pointers[y][x*4 + 3] / 256.0;
+      raster->pixels[y][x].r = (alpha * row_pointers[y][x*4]) + ((1 - alpha) * 255);
+      raster->pixels[y][x].g = (alpha * row_pointers[y][x*4 + 1]) + ((1 - alpha) * 255);
+      raster->pixels[y][x].b = (alpha * row_pointers[y][x*4 + 2]) + ((1 - alpha) * 255);
+    }
+  }
+
+  png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+  free(image_data);
+  free(row_pointers);
+
+  return raster;
 }
 
