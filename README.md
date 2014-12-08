@@ -14,8 +14,7 @@ a way to view images graphically.
 will read from stdin.
 
 ## Issues
-* Only supports 24-bit BMP files, and nothing complicated like palettes. More formats
-might be added if I have time.
+* Only supports 24-bit BMP files and JPEGs. More formats might be added if I have time.
 * Low contrast images don't show up well, though this is a limitation of the ASCII art
 medium itself. A different ASCII palette might help.
 * I wrote this for fun in a few hours with very little prior experience using C.
