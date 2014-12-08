@@ -10,8 +10,8 @@ a way to view images graphically.
 
 ## Options
 * `-w NUM`: Sets the number of characters wide the output will be.
-* `*.bmp`: The last argument ending in ".bmp" will be used as the input file. Otherwise it
-will read from stdin.
+* `FILE`: The last argument that is not another option will be used as the input file.
+Otherwise it will read from stdin.
 
 ## Issues
 * Only supports 24-bit BMP files, JPEGs, and PNGs. More formats might be added if I have time.
