@@ -21,148 +21,42 @@
  * THE SOFTWARE.
  */
 
-#include "environment.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-int endswith(char* str, char* suffix) {
+#include "environment.h"
+#include "convert.h"
+
+#define IMAGE_TYPE_INVALID 0
+#define IMAGE_TYPE_BITMAP 1
+#define IMAGE_TYPE_JPEG 2
+#define IMAGE_TYPE_PNG 4
+
+int endswith(const char* str, const char* suffix) {
   int i, start, suflen = strlen(suffix);
   start = strlen(str) - suflen;
   if (start < 0) {
     return 0;
   }
   for (i = 0; i < suflen; i++) {
-    if (str[start+i] != suffix[i]) {
+    if (tolower(str[start+i]) != tolower(suffix[i])) {
       return 0;
     }
   }
   return 1;
 }
 
-typedef struct pixel_t {
-  unsigned char r;
-  unsigned char g;
-  unsigned char b;
-} pixel_t;
-
-typedef struct raster_t {
-  pixel_t **pixels;
-  int width;
-  int height;
-} raster_t;
-
-raster_t* create_raster(int width, int height) {
-  int i;
-  raster_t *raster = malloc(sizeof(raster_t));
-  if (!raster) {
-    fprintf(stderr, "Memory allocation failure.\n");
-    exit(2);
+int get_image_type(const char *filename) {
+  if (endswith(filename, ".bmp")) {
+    return IMAGE_TYPE_BITMAP;
+  } else if (endswith(filename, ".jpg") || endswith(filename, ".jpeg")) {
+    return IMAGE_TYPE_JPEG;
+  } else if (endswith(filename, ".png")) {
+    return IMAGE_TYPE_PNG;
   }
-
-  raster->pixels = malloc(height * sizeof(pixel_t*));
-  if (!raster->pixels) {
-    fprintf(stderr, "Memory allocation failure.\n");
-    exit(2);
-  }
-
-  for (i = 0; i < height; i++) {
-    raster->pixels[i] = malloc(width * sizeof(pixel_t));
-    if (!raster->pixels[i]) {
-      fprintf(stderr, "Memory allocation failure.\n");
-      exit(2);
-    }
-  }
-
-  raster->width = width;
-  raster->height = height;
-
-  return raster;
-}
-
-void free_raster(raster_t *raster) {
-  int i;
-  for (i = 0; i < raster->height; i++) {
-    free(raster->pixels[i]);
-  }
-  free(raster->pixels);
-  free(raster);
-}
-
-unsigned char* read_byte_array(FILE *file, int *length) {
-  int buflen = 65535;
-  int c;
-  unsigned char *new_bytes, *bytes = malloc(buflen * sizeof(unsigned char));
-  if (!bytes) {
-    fprintf(stderr, "Memory allocation failure.\n");
-    exit(2);
-  }
-  *length = 0;
-  while ((c = fgetc(file)) != EOF) {
-    if (*length > buflen) {
-      buflen *= 1.5;
-      new_bytes = realloc(bytes, buflen * sizeof(unsigned char));
-      if (!new_bytes) {
-	free(bytes);
-	fprintf(stderr, "Memory allocation failure.\n");
-	exit(2);
-      }
-      bytes = new_bytes;
-    }
-    bytes[*length] = (unsigned char)c;
-    (*length)++;
-  }
-  return bytes;
-}
-
-raster_t* convert_byte_array(unsigned char *bytes, const int length) {
-  raster_t *raster;
-  int width, height, row_padded, x, y;
-  unsigned int offset;
-  unsigned short bit_depth;
-
-  //The combined byte length of the headers should be at least 54 bytes,
-  //and the first two bytes of the file should be 'B' and 'M'.
-  if (length < 54 || bytes[0] != 'B' || bytes[1] != 'M') {
-    fprintf(stderr, "The input was not recognized as a BMP file.\n");
-    exit(3);
-  }
-
-  //Read in relevant header info
-  offset = *(unsigned int *)(&bytes[10]);
-  width = *(int *)(&bytes[18]);
-  height = *(int *)(&bytes[22]);
-  bit_depth = *(unsigned short *)(&bytes[28]);
-
-  //We only support 24-bit BMPs right now
-  if (bit_depth != 24) {
-    fprintf(stderr, "BMP must be a 24-bit image.\n");
-    exit(4);
-  }
-
-  //Each row of pixels is padded in byte multiples of 4
-  row_padded = ((width * 3) + 3) & (~3);
-
-  //Make sure width and height are positive and the byte array is at least
-  //long enough to contain all of the pixels.
-  if (width < 0 || height < 0 || (offset + (row_padded * height)) > length) {
-    fprintf(stderr, "Invalid BMP file.\n");
-    exit(3);
-  }
-
-  //Create the raster of the specified size
-  raster = create_raster(width, height);
-
-  for (y = height - 1; y >= 0; --y) {
-    for (x = 0; x < width; ++x) {
-      raster->pixels[height-y-1][x].b = bytes[offset+(row_padded*y)+(x*3)];
-      raster->pixels[height-y-1][x].g = bytes[offset+(row_padded*y)+(x*3)+1];
-      raster->pixels[height-y-1][x].r = bytes[offset+(row_padded*y)+(x*3)+2];
-    }
-  }
-
-  return raster;
+  return IMAGE_TYPE_INVALID;
 }
 
 void print_raster(raster_t *raster, const int print_width) {
@@ -193,10 +87,9 @@ void print_raster(raster_t *raster, const int print_width) {
 }
 
 int main(int argc, char **argv) {
-  int i, print_width = 0, raw_bytes_length = 0;
+  int i, print_width = 0, image_type = IMAGE_TYPE_INVALID;
   char *filename = 0;
   FILE *imgfile;
-  unsigned char *raw_bytes;
   raster_t *raster;
 
   for (i = 1; i < argc; ++i) {
@@ -207,12 +100,14 @@ int main(int argc, char **argv) {
 	  fprintf(stderr, "Usage: -w NUMCHARSWIDE\n");
 	  exit(1);
 	}
+	++i;
       } else {
 	fprintf(stderr, "Usage: -w NUMCHARSWIDE\n");
 	exit(1);
       }
-    } else if (endswith(argv[i], ".bmp")) {
+    } else {
       filename = argv[i];
+      image_type = get_image_type(filename);
     }
   }
 
@@ -221,32 +116,42 @@ int main(int argc, char **argv) {
   }
 
   if (filename) {
-    imgfile = fopen(filename, "r");
+    imgfile = fopen(filename, "rb");
     if (!imgfile) {
       fprintf(stderr, "Failed to open image file %s.\n", filename);
       exit(1);
     }
   } else {
+    image_type = IMAGE_TYPE_BITMAP;
     imgfile = stdin;
   }
 
-  raw_bytes = read_byte_array(imgfile, &raw_bytes_length);
-  if (!raw_bytes) {
-    fprintf(stderr, "Failed to read image data.\n");
-    exit(1);
+  switch (image_type) {
+    case IMAGE_TYPE_BITMAP:
+      raster = create_raster_from_bmp(imgfile);
+      break;
+    case IMAGE_TYPE_JPEG:
+      raster = create_raster_from_jpg(imgfile);
+      break;
+    case IMAGE_TYPE_PNG:
+      raster = create_raster_from_png(imgfile);
+      break;
+    case IMAGE_TYPE_INVALID:
+    default:
+      fprintf(stderr, "Unable to detect valid image format.\n");
+      exit(5);
   }
 
-  raster = convert_byte_array(raw_bytes, raw_bytes_length);
+  fclose(imgfile);
+
   if (!raster) {
-    fprintf(stderr, "Failed to convert raw bytes to pixel data.\n");
+    fprintf(stderr, "Failed to get pixel data from file.\n");
     exit(1);
   }
 
   print_raster(raster, print_width);
 
-  free(raw_bytes);
   free_raster(raster);
-
   return 0;
 }
 
