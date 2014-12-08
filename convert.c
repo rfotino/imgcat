@@ -23,6 +23,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <jpeglib.h>
 
 #include "convert.h"
 
@@ -141,10 +142,39 @@ raster_t* create_raster_from_bmp(FILE *file) {
   free(bytes);
   return raster;
 }
-
+void do_stuff(void) { }
 raster_t* create_raster_from_jpg(FILE *file) {
-  fprintf(stderr, "Reading JPEG files is currently not supported.\n");
-  exit(5);
+  raster_t *raster = 0;
+  struct jpeg_decompress_struct cinfo;
+  struct jpeg_error_mgr jerr;
+  JSAMPARRAY buffer;
+  int x, y;
+
+  cinfo.err = jpeg_std_error(&jerr);
+  jpeg_create_decompress(&cinfo);
+  jpeg_stdio_src(&cinfo, file);
+  jpeg_read_header(&cinfo, TRUE);
+  jpeg_start_decompress(&cinfo);
+
+  raster = create_raster(cinfo.image_width, cinfo.image_height);
+
+  buffer = (*cinfo.mem->alloc_sarray)
+    ((j_common_ptr) &cinfo, JPOOL_IMAGE, cinfo.output_width * cinfo.output_components, 1);
+
+  y = 0;
+  while (cinfo.output_scanline < cinfo.output_height) {
+    jpeg_read_scanlines(&cinfo, buffer, 1);
+    for (x = 0; x < cinfo.output_width; x++) {
+      raster->pixels[y][x].r = buffer[0][x*cinfo.output_components];
+      raster->pixels[y][x].g = buffer[0][x*cinfo.output_components + 1];
+      raster->pixels[y][x].b = buffer[0][x*cinfo.output_components + 2];
+    }
+    y++;
+  }
+  jpeg_finish_decompress(&cinfo);
+  jpeg_destroy_decompress(&cinfo);
+
+  return raster;
 }
 
 raster_t* create_raster_from_png(FILE *file) {
